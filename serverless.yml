@@ -1,0 +1,101 @@
+service: serverless-graphql
+
+frameworkVersion: '3'
+
+custom:
+  # tableName: 'serverless-graphql-dev-users-table'
+  tableName: ${self:service}-${self:provider.stage}-users-table
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  stage: dev
+  region: 'us-east-1'
+  cors: true
+  iam:
+    role: IamRoleForLambda
+  environment:
+    USERS_TABLE: ${self:custom.tableName}
+    JWT_SECRET: valayriansteel
+
+plugins:
+  - serverless-offline
+
+functions:
+  userHandler:
+    handler: dist/index.graphqlHandler 
+    role: IamRoleForLambda
+    events:
+      - httpApi:
+          method: POST
+          path: /graphql
+          cors: true
+
+resources:
+  Resources:
+    IamRoleForLambda:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: ${self:service}-${self:provider.stage}-role
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: 'Allow'
+              Principal:
+                Service: 'lambda.amazonaws.com'
+              Action: 'sts:AssumeRole'
+        Policies:
+          - PolicyName: DynamoDBAccessPolicy
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:Query
+                    - dynamodb:Scan
+                    - dynamodb:PutItem
+                    - dynamodb:GetItem
+                    - dynamodb:DeleteItem
+                    - dynamodb:UpdateItem
+                  Resource:
+                    - !Sub ${UsersDynamoDBTable.Arn}
+          - PolicyName: CloudWatchLogPolicy
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - logs:CreateLogGroup
+                    - logs:CreateLogStream
+                    - logs:PutLogEvents
+                  Resource:
+                    - '*'
+    UsersDynamoDBTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.tableName}
+        AttributeDefinitions:
+          - AttributeName: "UserName"
+            AttributeType: "S"
+          - AttributeName: "MobileNumber"
+            AttributeType: "N"
+          - AttributeName: "Role"
+            AttributeType: "S"
+        KeySchema:
+          - AttributeName: "UserName"
+            KeyType: "HASH"
+          - AttributeName: "MobileNumber"
+            KeyType: "RANGE"
+        ProvisionedThroughput:
+          ReadCapacityUnits: 2
+          WriteCapacityUnits: 2
+        GlobalSecondaryIndexes:
+          - IndexName: RoleIndex
+            KeySchema:
+              - AttributeName: Role
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+            ProvisionedThroughput:
+                ReadCapacityUnits: 2
+                WriteCapacityUnits: 2
