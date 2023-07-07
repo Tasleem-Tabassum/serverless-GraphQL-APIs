@@ -277,7 +277,7 @@ export const updateUserController = async (token: string, name: string, userName
 
         return {
             statusCode: 200,
-            body: JSON.stringify({ user: data.Attributes })
+            body: JSON.stringify({ message: 'Profile updated successfully!' })
         }
 
     } catch(error) {
